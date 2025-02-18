@@ -1,10 +1,9 @@
 import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { UpdateOrderDto } from './dto/update-order.dto';
 import { RpcException } from '@nestjs/microservices';
-import { PaginationDto } from '../common/dto/pagination.dto';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
+import { ChangeOrderStatusDto } from './dto';
 
 @Injectable()
 export class OrdersService extends PrismaClient implements OnModuleInit {
@@ -18,11 +17,17 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
 
 
   async create(createOrderDto: CreateOrderDto) {
-    try {
-      return await this.order.create({data:createOrderDto});
-    } catch (error) {
-      throw new RpcException(error)
+
+    return {
+      service: 'create order',
+      createOrderDto
     }
+
+    // try {
+    //   return await this.order.create({data:createOrderDto});
+    // } catch (error) {
+    //   throw new RpcException(error)
+    // }
   }
 
   async findAll(orderPaginationDto:OrderPaginationDto) {
@@ -61,7 +66,23 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
     return order;
   }
 
-  changeOrderStatus(id: number, updateOrderDto: UpdateOrderDto) {
-    return `This action change OrderStatus a #${id} order`;
+  async changeOrderStatus(changeOrderStatusDto: ChangeOrderStatusDto) {
+    const {id,status} = changeOrderStatusDto;
+
+    const order = await this.findOne(id);
+
+    if(order.status === status){
+      return order;
+    }
+
+    try {
+      return await this.order.update({where:{id},data:{status}})
+    } catch (error) {
+      throw new RpcException({
+        status:HttpStatus.NOT_FOUND,
+        message:`order with id ${id} not found`
+      })
+    }
+
   }
 }
