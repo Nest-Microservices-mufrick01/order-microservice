@@ -6,6 +6,7 @@ import { OrderPaginationDto } from './dto/order-pagination.dto';
 import { ChangeOrderStatusDto } from './dto';
 import { PRODUCT_SERVICE } from 'src/config';
 import { catchError, firstValueFrom } from 'rxjs';
+import { OrderItemDto } from './dto/order-item.dto';
 
 @Injectable()
 export class OrdersService extends PrismaClient implements OnModuleInit {
@@ -109,14 +110,49 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
 
   async findOne(id: string) {
    
-    const order = await this.order.findFirst({where:{id}})
+    const order = await this.order.findFirst(
+      {
+        where:{id},
+        include:{
+          orderItem:{
+            select:{
+              productId:true,
+              quantity:true,
+              price:true
+            }
+          }
+        }
+      },
+      
+    )
+
     if(!order){
       throw new RpcException({
         status:HttpStatus.NOT_FOUND,
         message:`order with id ${id} not found`
       })
     }
-    return order;
+
+    const productsIds = order.orderItem.map(item => item.productId);
+    let productsDetail:any[];
+    try {
+      productsDetail = await firstValueFrom(this.productsClient.send({cmd:'validate_products'},productsIds))
+    } catch (error) {
+      throw new RpcException({
+        status:HttpStatus.NOT_FOUND,
+        message:`some item in order is not found`
+      })
+    }
+    
+    return {
+      ...order,
+      orderItem: order.orderItem.map(
+        orderItem=>({
+          name: productsDetail.find(product => product.id === orderItem.productId).name,
+          ... orderItem
+        })
+      )
+    }
   }
 
   async changeOrderStatus(changeOrderStatusDto: ChangeOrderStatusDto) {
