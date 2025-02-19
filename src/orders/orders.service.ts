@@ -1,17 +1,16 @@
 import { HttpStatus, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { OrderItem, PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
 import { ChangeOrderStatusDto } from './dto';
-import { PRODUCT_SERVICE } from 'src/config';
-import { catchError, firstValueFrom } from 'rxjs';
-import { OrderItemDto } from './dto/order-item.dto';
+import { NATS_SERVICE } from 'src/config';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class OrdersService extends PrismaClient implements OnModuleInit {
 
-  constructor( @Inject(PRODUCT_SERVICE) private readonly productsClient: ClientProxy){
+  constructor( @Inject(NATS_SERVICE) private readonly natsClient: ClientProxy){
     super();
   }
 
@@ -28,7 +27,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
     try {
       // 1. confirmar los ids de los productos
       const productsIds = createOrderDto.items.map(item=>item.productId);
-      const productDetails:any[] = await firstValueFrom( this.productsClient.send({cmd:'validate_products'},productsIds))
+      const productDetails:any[] = await firstValueFrom( this.natsClient.send({cmd:'validate_products'},productsIds))
 
       // 2. calcular valores
       const totalAmount = createOrderDto.items.reduce((acc,orderItem)=>{
@@ -136,7 +135,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
     const productsIds = order.orderItem.map(item => item.productId);
     let productsDetail:any[];
     try {
-      productsDetail = await firstValueFrom(this.productsClient.send({cmd:'validate_products'},productsIds))
+      productsDetail = await firstValueFrom(this.natsClient.send({cmd:'validate_products'},productsIds))
     } catch (error) {
       throw new RpcException({
         status:HttpStatus.NOT_FOUND,
